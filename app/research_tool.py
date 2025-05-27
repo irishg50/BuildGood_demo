@@ -20,33 +20,59 @@ class ResearchTool:
 
     def search_youtube(self, query, max_results=5):
         api_key = os.getenv('YOUTUBE_API_KEY')
+        if not api_key:
+            print("[YOUTUBE][ERROR] YouTube API key not found in environment variables")
+            return []
+            
         url = "https://www.googleapis.com/youtube/v3/search"
-        # Calculate 2 weeks ago in ISO format
-        two_weeks_ago = (datetime.utcnow() - timedelta(days=14)).isoformat("T") + "Z"
         params = {
             "part": "snippet",
             "q": query,
             "type": "video",
-            "maxResults": max_results,
+            "maxResults": str(max_results),
             "key": api_key,
-            "publishedAfter": two_weeks_ago,
-            "order": "date",
-            "relevanceLanguage": "en"
+            "order": "relevance",
+            "relevanceLanguage": "en",
+            "videoEmbeddable": "true",
+            "videoSyndicated": "true",
+            "videoDuration": "medium"
         }
-        response = requests.get(url, params=params)
-        data = response.json()
-        results = []
-        for item in data.get("items", []):
-            video_id = item["id"]["videoId"]
-            snippet = item["snippet"]
-            results.append({
-                "title": snippet["title"],
-                "link": f"https://www.youtube.com/watch?v={video_id}",
-                "snippet": snippet["description"],
-                "type": "video",
-                "date": snippet["publishedAt"]
-            })
-        return results
+        
+        try:
+            print(f"[YOUTUBE][DEBUG] Making request to YouTube API with query: {query}")
+            print(f"[YOUTUBE][DEBUG] Request URL: {url}")
+            print(f"[YOUTUBE][DEBUG] Request params: {params}")
+            response = requests.get(url, params=params)
+            print(f"[YOUTUBE][DEBUG] Response status code: {response.status_code}")
+            print(f"[YOUTUBE][DEBUG] Response headers: {response.headers}")
+            response.raise_for_status()
+            data = response.json()
+            print(f"[YOUTUBE][DEBUG] Response data: {json.dumps(data, indent=2)}")
+            
+            if "error" in data:
+                print(f"[YOUTUBE][ERROR] YouTube API error: {data['error']}")
+                return []
+                
+            results = []
+            for item in data.get("items", []):
+                video_id = item["id"]["videoId"]
+                snippet = item["snippet"]
+                results.append({
+                    "title": snippet["title"],
+                    "link": f"https://www.youtube.com/watch?v={video_id}",
+                    "snippet": snippet["description"],
+                    "type": "video",
+                    "date": snippet["publishedAt"]
+                })
+            print(f"[YOUTUBE][DEBUG] Found {len(results)} videos")
+            return results
+            
+        except requests.exceptions.RequestException as e:
+            print(f"[YOUTUBE][ERROR] Request failed: {str(e)}")
+            return []
+        except Exception as e:
+            print(f"[YOUTUBE][ERROR] Unexpected error: {str(e)}")
+            return []
 
     def search_upcoming_webinars(self, max_results=5):
         """Search for upcoming webinars in the next two weeks."""
