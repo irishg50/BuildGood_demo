@@ -3,7 +3,6 @@ import json
 from datetime import datetime, timedelta
 import requests
 from serpapi import GoogleSearch
-import yt_dlp
 from urllib.parse import urlparse
 import PyPDF2
 import io
