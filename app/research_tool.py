@@ -114,6 +114,124 @@ class ResearchTool:
             
         return results
 
+    def search_articles(self, max_results=5):
+        """Search for articles about digital fundraising."""
+        all_articles = []
+        
+        # First search: charity nonprofit focus
+        query1 = "charity nonprofit digital fundraising articles blogs case studies"
+        params1 = {
+            "engine": "google",
+            "q": query1,
+            "api_key": self.serpapi_key,
+            "num": max_results,
+            "as_qdr": "d14"  # Last 14 days
+        }
+        
+        search1 = GoogleSearch(params1)
+        results1 = search1.get_dict()
+        
+        if "organic_results" in results1:
+            for item in results1["organic_results"]:
+                all_articles.append({
+                    "title": item.get("title", "Untitled"),
+                    "link": item.get("link", ""),
+                    "snippet": item.get("snippet", ""),
+                    "type": "article",
+                    "date": item.get("date", ""),
+                    "source_query": "charity nonprofit"
+                })
+        
+        # Second search: best practices focus
+        query2 = "digital fundraising best practices articles blogs case studies"
+        params2 = {
+            "engine": "google",
+            "q": query2,
+            "api_key": self.serpapi_key,
+            "num": max_results,
+            "as_qdr": "d14"  # Last 14 days
+        }
+        
+        search2 = GoogleSearch(params2)
+        results2 = search2.get_dict()
+        
+        if "organic_results" in results2:
+            for item in results2["organic_results"]:
+                # Check if this URL is already in our results to avoid duplicates
+                if not any(article["link"] == item.get("link", "") for article in all_articles):
+                    all_articles.append({
+                        "title": item.get("title", "Untitled"),
+                        "link": item.get("link", ""),
+                        "snippet": item.get("snippet", ""),
+                        "type": "article",
+                        "date": item.get("date", ""),
+                        "source_query": "best practices"
+                    })
+        
+        return all_articles
+
+    def search_pdfs(self, max_results=5):
+        """Search for PDF documents about digital fundraising."""
+        all_pdfs = []
+        
+        # First search: charity nonprofit focus
+        query1 = "charity nonprofit digital fundraising filetype:pdf"
+        params1 = {
+            "engine": "google",
+            "q": query1,
+            "api_key": self.serpapi_key,
+            "num": max_results,
+            "as_qdr": "d14"  # Last 14 days
+        }
+        
+        search1 = GoogleSearch(params1)
+        results1 = search1.get_dict()
+        
+        if "organic_results" in results1:
+            for item in results1["organic_results"]:
+                if item.get("link", "").lower().endswith('.pdf'):
+                    all_pdfs.append({
+                        "title": item.get("title", "Untitled"),
+                        "link": item.get("link", ""),
+                        "snippet": item.get("snippet", ""),
+                        "type": "pdf",
+                        "date": item.get("date", ""),
+                        "source_query": "charity nonprofit"
+                    })
+        
+        # Second search: best practices focus
+        query2 = "digital fundraising best practices filetype:pdf"
+        params2 = {
+            "engine": "google",
+            "q": query2,
+            "api_key": self.serpapi_key,
+            "num": max_results,
+            "as_qdr": "d14"  # Last 14 days
+        }
+        
+        search2 = GoogleSearch(params2)
+        results2 = search2.get_dict()
+        
+        if "organic_results" in results2:
+            for item in results2["organic_results"]:
+                if item.get("link", "").lower().endswith('.pdf'):
+                    # Check if this URL is already in our results to avoid duplicates
+                    if not any(pdf["link"] == item.get("link", "") for pdf in all_pdfs):
+                        all_pdfs.append({
+                            "title": item.get("title", "Untitled"),
+                            "link": item.get("link", ""),
+                            "snippet": item.get("snippet", ""),
+                            "type": "pdf",
+                            "date": item.get("date", ""),
+                            "source_query": "best practices"
+                        })
+        
+        return all_pdfs
+
+    def search_videos(self, max_results=5):
+        """Search for videos about digital fundraising."""
+        return self.search_youtube("digital fundraising best practices", max_results)
+
     def _perplexity_search(self, query, num_results):
         """Query Perplexity API for search results."""
         url = "https://api.perplexity.ai/search"
