@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 import PyPDF2
 import io
 from dotenv import load_dotenv
+from app.models.resource import Resource
+from app.extensions import db
 
 load_dotenv()
 print("Loaded Perplexity API Key:", os.getenv('PERPLEXITY_API_KEY'))
@@ -137,8 +139,65 @@ class ResearchTool:
         if "video" in content_types:
             videos = self.search_videos()
             results.extend(videos)
+        
+        # Save results to database
+        saved_results = []
+        for result in results:
+            try:
+                # Check if resource already exists by URL
+                url = result.get('link', '') or result.get('url', '')
+                existing = Resource.query.filter_by(url=url).first()
+                
+                if existing:
+                    # Update existing resource
+                    existing.title = result.get('title', 'Untitled')
+                    existing.content_type = result.get('type', 'article')
+                    existing.content = result.get('snippet', '') or result.get('content', '')
+                    existing.updated_at = datetime.utcnow()
+                    db.session.commit()
+                    saved_results.append(existing)
+                    print(f"[RESEARCH] Updated existing resource: {existing.title}")
+                else:
+                    # Create new resource
+                    resource = Resource(
+                        title=result.get('title', 'Untitled'),
+                        content_type=result.get('type', 'article'),
+                        url=url,
+                        content=result.get('snippet', '') or result.get('content', ''),
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow()
+                    )
+                    db.session.add(resource)
+                    db.session.commit()
+                    saved_results.append(resource)
+                    print(f"[RESEARCH] Saved new resource: {resource.title}")
+            except Exception as e:
+                db.session.rollback()
+                print(f"[RESEARCH] Error saving resource {result.get('title', 'Untitled')}: {str(e)}")
+                # Still include the result even if save failed
+                saved_results.append(result)
+        
+        # Convert saved results to dictionary format for LLM
+        llm_results = []
+        for result in saved_results:
+            if isinstance(result, Resource):
+                llm_results.append({
+                    'title': result.title,
+                    'type': result.content_type,
+                    'content': result.content,
+                    'url': result.url,
+                    'created_at': result.created_at.isoformat() if result.created_at else None
+                })
+            else:
+                llm_results.append(result)
+        
+        # Analyze results with GPT-4
+        if llm_results:
+            analysis = self._analyze_with_gpt4(llm_results)
+            if analysis:
+                return analysis
             
-        return results
+        return {"summary": "No results found to analyze.", "raw_results": []}
 
     def search_articles(self, max_results=5):
         """Search for articles about digital fundraising."""
@@ -327,6 +386,62 @@ class ResearchTool:
         except Exception as e:
             print(f"[PERPLEXITY][SUMMARY][ERROR] {e}")
             return ''
+
+    def _analyze_with_gpt4(self, results):
+        """Analyze search results using GPT-4 to generate a comprehensive summary report."""
+        try:
+            # Prepare the prompt with search results
+            prompt = "Please analyze the following digital fundraising resources and provide a comprehensive summary report highlighting innovative fundraising knowledge and trends. Format your response using markdown:\n\n"
+            
+            for result in results:
+                prompt += f"Title: {result.get('title', 'Untitled')}\n"
+                prompt += f"Type: {result.get('type', 'article')}\n"
+                prompt += f"Content: {result.get('snippet', '') or result.get('content', '')}\n"
+                prompt += f"URL: {result.get('link', '') or result.get('url', '')}\n"
+                prompt += "---\n"
+            
+            prompt += "\nPlease provide your analysis in markdown format with the following sections:\n\n"
+            prompt += "1. # Key Findings\n"
+            prompt += "2. # Innovative Approaches\n"
+            prompt += "3. # Emerging Trends\n"
+            prompt += "4. # Best Practices\n"
+            prompt += "5. # Recommendations\n\n"
+            prompt += "Use markdown features like:\n"
+            prompt += "- Headers (##, ###)\n"
+            prompt += "- Bullet points (- or *)\n"
+            prompt += "- Bold (**text**)\n"
+            prompt += "- Italics (*text*)\n"
+            prompt += "- Links ([text](url))\n"
+            prompt += "- Code blocks (```) for specific examples\n"
+            
+            # Call OpenAI API
+            response = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-4o",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7,
+                    "max_tokens": 2000
+                }
+            )
+            
+            if response.status_code == 200:
+                analysis = response.json()["choices"][0]["message"]["content"]
+                return {
+                    "summary": analysis,
+                    "raw_results": results  # Keep original results for reference
+                }
+            else:
+                print(f"[GPT-4][ERROR] API call failed: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"[GPT-4][ERROR] Analysis failed: {str(e)}")
+            return None
 
     def save_results(self, results):
         """Save research results to a JSON file."""

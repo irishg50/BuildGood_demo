@@ -48,11 +48,10 @@ def create_app(test_config=None):
     # Create database tables
     with app.app_context():
         try:
-            # Drop and recreate tables
-            print("[DEBUG] Dropping and recreating tables...")
-            db.drop_all()
+            # Create tables if they don't exist
+            print("[DEBUG] Creating tables if they don't exist...")
             db.create_all()
-            print("[DEBUG] Tables recreated successfully")
+            print("[DEBUG] Tables created/verified successfully")
             
             # Verify the resources table structure
             inspector = db.inspect(db.engine)

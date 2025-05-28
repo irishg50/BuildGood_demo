@@ -33,79 +33,24 @@ def search():
         # Initialize research tool
         research_tool = ResearchTool()
         
-        # Perform search with content type filtering
-        results = research_tool.search_digital_fundraising(content_types=content_types)
-        print(f"[RESEARCH] Number of results fetched: {len(results)}")
+        # Perform search with content type filtering and get GPT-4 analysis
+        analysis = research_tool.search_digital_fundraising(content_types=content_types)
+        print(f"[RESEARCH] Analysis completed")
         
-        # Process results and track which ones are new
-        processed_results = []
-        for result in results:
-            # Map fields for frontend compatibility
-            title = result.get('title', 'Untitled')
-            content = result.get('snippet', '') or result.get('content', '') or ''
-            content_type = result.get('type', 'article') or result.get('content_type', 'article')
-            url = result.get('link', '') or result.get('url', '')
+        if analysis and analysis.get('summary'):
+            return jsonify({
+                'status': 'success',
+                'summary': analysis['summary'],
+                'raw_results': analysis['raw_results']
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'error': 'Failed to generate analysis'
+            }), 500
             
-            # Check if resource already exists by URL
-            existing = Resource.query.filter_by(url=url).first()
-            
-            if existing:
-                # If it exists, add it to results with its database ID
-                processed_results.append({
-                    'id': existing.id,
-                    'title': title,
-                    'content_type': existing.content_type,
-                    'url': url,
-                    'content': existing.content,
-                    'created_at': existing.created_at.isoformat() if existing.created_at else None,
-                    'updated_at': existing.updated_at.isoformat() if existing.updated_at else None,
-                    'is_new': False
-                })
-                print(f"[RESEARCH] Found existing resource: {title}")
-            else:
-                # If it's new, save it to database
-                try:
-                    resource = Resource(
-                        title=title,
-                        content_type=content_type,
-                        url=url,
-                        content=content,
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow()
-                    )
-                    db.session.add(resource)
-                    db.session.commit()
-                    
-                    # Add to results with is_new flag
-                    processed_results.append({
-                        **resource.to_dict(),
-                        'is_new': True
-                    })
-                    print(f"[RESEARCH] Saved new resource: {title}")
-                except Exception as e:
-                    db.session.rollback()
-                    print(f"[RESEARCH] Error saving resource {title}: {str(e)}")
-                    # Still add to results even if save failed
-                    processed_results.append({
-                        'title': title,
-                        'content_type': content_type,
-                        'url': url,
-                        'content': content,
-                        'is_new': True,
-                        'error': str(e)
-                    })
-        
-        response = {
-            'status': 'success',
-            'results': processed_results
-        }
-        print('[RESEARCH][DEBUG] Response to frontend:', json.dumps(response, indent=2))
-        return jsonify(response)
-        
     except Exception as e:
         print(f"[RESEARCH][ERROR] {str(e)}")
-        import traceback
-        traceback.print_exc()
         return jsonify({
             'status': 'error',
             'error': str(e)
